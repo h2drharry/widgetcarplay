@@ -159,6 +159,14 @@
         },
         {
           "class": "DepictionSubheaderView",
+          "title": "0.2.8"
+        },
+        {
+          "class": "DepictionMarkdownView",
+          "markdown": "**Tiếng Việt:** GOFA và Waze chạy được trên bản mới hơn. GOFA: đọc được mọi bản (đã thử 4.2.3), không còn chỉ 4.2.1. Waze 5.26.0: hiện lại cảnh báo camera/đèn đỏ (cấu trúc thẻ đổi), và tự bật GPS khi được đánh thức ở nền nên chọn Waze làm nguồn mà không cần mở Waze. Mở lại nguồn sau khi cập nhật.\n\n**English:** GOFA and Waze work on newer builds. GOFA: reads any build (checked on 4.2.3), no longer only 4.2.1. Waze 5.26.0: shows camera/red-light alerts again (its descriptor changed), and starts GPS when woken in the background, so selecting Waze fills the bubble without opening Waze. Reopen the source after updating."
+        },
+        {
+          "class": "DepictionSubheaderView",
           "title": "0.2.7"
         },
         {
