@@ -24,6 +24,9 @@ static double positionTime=-1, lastGPSUnixTime=-1;
 static int requestToken=-1;
 static NSInteger authorization=-1;
 static BOOL backgroundLocation;
+// Which of GOFA's entry points matched in this build, for the status file.
+static NSString *gofaVersion;
+static BOOL locationHooked;
 static NSArray *PointKey(NSDictionary *point) {
     return @[point[@"identity"],point[@"sign"],point[@"latitude"],point[@"longitude"]];
 }
@@ -37,7 +40,9 @@ static double AnchorDistance(CLLocation *anchor) {
 }
 static void (*originalLocations)(id,SEL,CLLocationManager *,NSArray *);
 static NSUInteger Semantic(NSInteger sign) {
-    // GOFA 4.2.1 enum reflection records and rawValue getter tables, measured in this build.
+    // GOFA's sign IDs (`traffic_sign_id`), named by 4.2.1's enum reflection records and rawValue
+    // getter tables. They arrive with GOFA's map data, so later app builds share them; a build that
+    // renumbered this enum (not seen) is the one drift the structural checks cannot catch.
     switch (sign) {
         case 33:return GVMRoadAlertSpeedCamera;
         case 32:return GVMRoadAlertTrafficCamera;
@@ -118,6 +123,7 @@ static void Publish(BOOL force) {
         NSMutableDictionary *status=[output mutableCopy]; status[@"appState"]=@(UIApplication.sharedApplication.applicationState);
         status[@"authorization"]=@(authorization); status[@"backgroundLocation"]=@(backgroundLocation);
         status[@"gpsAge"]=positionTime>=0 ? @(now-positionTime) : NSNull.null;
+        status[@"gofaVersion"]=gofaVersion ?: NSNull.null; status[@"locationHook"]=@(locationHooked);
         NSData *data=[NSJSONSerialization dataWithJSONObject:status options:0 error:nil];
         [data writeToFile:[NSTemporaryDirectory() stringByAppendingPathComponent:@"gmaphud-gofa-output.json"] atomically:YES];
     }
@@ -150,8 +156,10 @@ static void Locations(id self,SEL cmd,CLLocationManager *manager,NSArray *locati
 }
 __attribute__((constructor)) static void Initialize(void) {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.lumi.GOFA"]) return;
-    if (![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] isEqual:@"4.2.1"] ||
-        ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] isEqual:@"3"]) return;
+    // Every entry point is checked on its own (method type encoding, notification payload model and
+    // field names), so builds after the measured 4.2.1 keep whatever still matches.
+    NSDictionary *info=NSBundle.mainBundle.infoDictionary;
+    gofaVersion=[NSString stringWithFormat:@"%@ (%@)",info[@"CFBundleShortVersionString"],info[@"CFBundleVersion"]];
     dispatch_async(dispatch_get_main_queue(), ^{
         samples=NSMutableDictionary.dictionary; candidateGroups=NSMutableDictionary.dictionary;
         candidateTimes=NSMutableDictionary.dictionary;
@@ -159,7 +167,10 @@ __attribute__((constructor)) static void Initialize(void) {
         Class cls=NSClassFromString(@"GOFA.GofaLocationManager");
         SEL selector=@selector(locationManager:didUpdateLocations:);
         Method method=class_getInstanceMethod(cls,selector);
-        if (method && !strcmp(method_getTypeEncoding(method),"v32@0:8@16@24")) MSHookMessageEx(cls,selector,(IMP)Locations,(IMP *)&originalLocations);
+        if (method && !strcmp(method_getTypeEncoding(method),"v32@0:8@16@24")) {
+            MSHookMessageEx(cls,selector,(IMP)Locations,(IMP *)&originalLocations);
+            locationHooked=YES;
+        }
         for (NSString *name in @[@"notificationSpeedBoard",@"notificationNextBoard",@"notificationOtherBoard",@"notificationLaneBoards"]) {
             [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
                 double received=NSProcessInfo.processInfo.systemUptime;

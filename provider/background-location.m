@@ -396,11 +396,11 @@ __attribute__((constructor)) static void ObserveShown(void) {
 }
 __attribute__((constructor)) static void InitializeLocationSession(void) {
 #if GVM_GOFA_SOURCE
-    if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.lumi.GOFA"] ||
-        ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] isEqual:@"4.2.1"] ||
-        ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleVersion"] isEqual:@"3"]) return;
+    // Public CoreLocation calls only, so any GOFA build.
+    if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.lumi.GOFA"]) return;
 #elif GVM_WAZE_SOURCE
-    // Public CoreLocation calls only, so any Waze build; its native GPS start stays 5.25.0-only.
+    // Public CoreLocation calls only, so any Waze build; its native background GPS start is pinned
+    // per build (5.25.0 and 5.26.0 measured) in waze-startup.m.
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.waze.iphone"]) return;
 #else
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"vn.vietmap.live"]) return;
