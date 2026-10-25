@@ -157,12 +157,15 @@ static void Publish(BOOL force) {
     GVMPublishSourceOutput([store outputAtUptime:now],now,force);
 }
 
-// Signature measured in Waze 5.25.0 and checked by type encoding at load. Preserve init-family
-// ownership and all arguments.
+// Signature measured in Waze 5.25.0, checked by type encoding at load (see Start for the 5.26.0
+// variant, which appends one trailing BOOL this fixed list ignores). Preserve init-family
+// ownership and all arguments the adapter reads.
 typedef id (*DescriptorInit)(id __attribute__((ns_consumed)), SEL, id alertId, NSInteger priority, BOOL isPreemptive, BOOL isValid, NSInteger distanceMeters, id title, id carplayTitle, id alertDescription, id carplayAlertDescription, id iconName, BOOL isCancellable, BOOL canSendThumbsUp, BOOL isCloseOnly, id primaryButtonText, id secondaryButtonText, BOOL disableCompactEtaBarTaps, BOOL showDistance, BOOL keepOpenAfterAction, BOOL closeOnlyOnSelection, double timeoutSeconds, NSInteger timerType, id zoneAlertData, BOOL shouldShowStillThere, BOOL didPassAlert, NSInteger triggerDistanceMeters, BOOL primaryButtonIsClose, BOOL secondaryButtonIsClose, BOOL shouldShowFocusedAlert, NSInteger silentActivationReason, id coordinate, BOOL shouldCheckDistanceFromLastAlert, NSInteger statsAlertId, NSInteger statsType, NSInteger statsSubtype, NSInteger statsSubtypeTrait, id statsUniqueId, BOOL dismissImmediatelyUponRemoval, BOOL isApproachingWithValidationHasValue, BOOL isApproachingWithValidation, BOOL hideActionsWhenInvalid, BOOL showOnCarPlayDashboard, BOOL doNotHideOnMapMovement) __attribute__((ns_returns_retained));
 static DescriptorInit OriginalDescriptor;
 static id Descriptor(id self __attribute__((ns_consumed)), SEL cmd, id alertId, NSInteger priority, BOOL isPreemptive, BOOL isValid, NSInteger distanceMeters, id title, id carplayTitle, id alertDescription, id carplayAlertDescription, id iconName, BOOL isCancellable, BOOL canSendThumbsUp, BOOL isCloseOnly, id primaryButtonText, id secondaryButtonText, BOOL disableCompactEtaBarTaps, BOOL showDistance, BOOL keepOpenAfterAction, BOOL closeOnlyOnSelection, double timeoutSeconds, NSInteger timerType, id zoneAlertData, BOOL shouldShowStillThere, BOOL didPassAlert, NSInteger triggerDistanceMeters, BOOL primaryButtonIsClose, BOOL secondaryButtonIsClose, BOOL shouldShowFocusedAlert, NSInteger silentActivationReason, id coordinate, BOOL shouldCheckDistanceFromLastAlert, NSInteger statsAlertId, NSInteger statsType, NSInteger statsSubtype, NSInteger statsSubtypeTrait, id statsUniqueId, BOOL dismissImmediatelyUponRemoval, BOOL isApproachingWithValidationHasValue, BOOL isApproachingWithValidation, BOOL hideActionsWhenInvalid, BOOL showOnCarPlayDashboard, BOOL doNotHideOnMapMovement) __attribute__((ns_returns_retained));
 static id Descriptor(id self __attribute__((ns_consumed)), SEL cmd, id alertId, NSInteger priority, BOOL isPreemptive, BOOL isValid, NSInteger distanceMeters, id title, id carplayTitle, id alertDescription, id carplayAlertDescription, id iconName, BOOL isCancellable, BOOL canSendThumbsUp, BOOL isCloseOnly, id primaryButtonText, id secondaryButtonText, BOOL disableCompactEtaBarTaps, BOOL showDistance, BOOL keepOpenAfterAction, BOOL closeOnlyOnSelection, double timeoutSeconds, NSInteger timerType, id zoneAlertData, BOOL shouldShowStillThere, BOOL didPassAlert, NSInteger triggerDistanceMeters, BOOL primaryButtonIsClose, BOOL secondaryButtonIsClose, BOOL shouldShowFocusedAlert, NSInteger silentActivationReason, id coordinate, BOOL shouldCheckDistanceFromLastAlert, NSInteger statsAlertId, NSInteger statsType, NSInteger statsSubtype, NSInteger statsSubtypeTrait, id statsUniqueId, BOOL dismissImmediatelyUponRemoval, BOOL isApproachingWithValidationHasValue, BOOL isApproachingWithValidation, BOOL hideActionsWhenInvalid, BOOL showOnCarPlayDashboard, BOOL doNotHideOnMapMovement) {
+    // On 5.26.0 the real method takes one extra trailing BOOL; forwarding the 5.25.0 argument
+    // list is deliberate — that slot stays physically present, so the original runs correctly.
     id result = OriginalDescriptor(self, cmd, alertId, priority, isPreemptive, isValid, distanceMeters, title, carplayTitle, alertDescription, carplayAlertDescription, iconName, isCancellable, canSendThumbsUp, isCloseOnly, primaryButtonText, secondaryButtonText, disableCompactEtaBarTaps, showDistance, keepOpenAfterAction, closeOnlyOnSelection, timeoutSeconds, timerType, zoneAlertData, shouldShowStillThere, didPassAlert, triggerDistanceMeters, primaryButtonIsClose, secondaryButtonIsClose, shouldShowFocusedAlert, silentActivationReason, coordinate, shouldCheckDistanceFromLastAlert, statsAlertId, statsType, statsSubtype, statsSubtypeTrait, statsUniqueId, dismissImmediatelyUponRemoval, isApproachingWithValidationHasValue, isApproachingWithValidation, hideActionsWhenInvalid, showOnCarPlayDashboard, doNotHideOnMapMovement);
     @try {
         Class idClass=NSClassFromString(@"Waze.CommonCodeAlertId");
@@ -192,14 +195,28 @@ __attribute__((constructor)) static void Start(void) {
     // getter's code), so builds other than 5.25.0 keep whatever still matches.
     NSString *version=[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
     Class cls=NSClassFromString(@"third_party_waze_client_ios_modules_WazeCommonCodeAlerts_WazeCommonCodeAlerts.CommonCodeAlertDescriptorData");
-    SEL selector=sel_registerName("initWithAlertId:priority:isPreemptive:isValid:distanceMeters:title:carplayTitle:alertDescription:carplayAlertDescription:iconName:isCancellable:canSendThumbsUp:isCloseOnly:primaryButtonText:secondaryButtonText:disableCompactEtaBarTaps:showDistance:keepOpenAfterAction:closeOnlyOnSelection:timeoutSeconds:timerType:zoneAlertData:shouldShowStillThere:didPassAlert:triggerDistanceMeters:primaryButtonIsClose:secondaryButtonIsClose:shouldShowFocusedAlert:silentActivationReason:coordinate:shouldCheckDistanceFromLastAlert:statsAlertId:statsType:statsSubtype:statsSubtypeTrait:statsUniqueId:dismissImmediatelyUponRemoval:isApproachingWithValidationHasValue:isApproachingWithValidation:hideActionsWhenInvalid:showOnCarPlayDashboard:doNotHideOnMapMovement:");
-    Method method=class_getInstanceMethod(cls,selector);
-    const char *encoding="@268@0:8@16q24B32B36q40@48@56@64@72@80B88B92B96@100@108B116B120B124B128d132q140@148B156B160q164B172B176B180q184@192B200q204q212q220q228@236B244B248B252B256B260B264";
+    // The descriptor initializer, measured on 5.25.0 and 5.26.0. 5.26.0 appends one trailing BOOL
+    // (requireDistanceInRange); every argument the hook reads keeps the same position and offset, so
+    // the fixed-signature C hook below reads them identically and ignores the extra one. Each variant
+    // is matched by its own selector and type encoding; an unknown build hooks nothing.
+    const char *prefix="initWithAlertId:priority:isPreemptive:isValid:distanceMeters:title:carplayTitle:alertDescription:carplayAlertDescription:iconName:isCancellable:canSendThumbsUp:isCloseOnly:primaryButtonText:secondaryButtonText:disableCompactEtaBarTaps:showDistance:keepOpenAfterAction:closeOnlyOnSelection:timeoutSeconds:timerType:zoneAlertData:shouldShowStillThere:didPassAlert:triggerDistanceMeters:primaryButtonIsClose:secondaryButtonIsClose:shouldShowFocusedAlert:silentActivationReason:coordinate:shouldCheckDistanceFromLastAlert:statsAlertId:statsType:statsSubtype:statsSubtypeTrait:statsUniqueId:dismissImmediatelyUponRemoval:isApproachingWithValidationHasValue:isApproachingWithValidation:hideActionsWhenInvalid:showOnCarPlayDashboard:doNotHideOnMapMovement:";
+    const char *sharedEncoding="@0:8@16q24B32B36q40@48@56@64@72@80B88B92B96@100@108B116B120B124B128d132q140@148B156B160q164B172B176B180q184@192B200q204q212q220q228@236B244B248B252B256B260B264";
+    NSArray *variants=@[
+        @{@"sel":@(prefix),@"enc":[@"@268" stringByAppendingString:@(sharedEncoding)]},
+        @{@"sel":[@(prefix) stringByAppendingString:@"requireDistanceInRange:"],@"enc":[@"@272" stringByAppendingFormat:@"%sB268",sharedEncoding]},
+    ];
     store=[GVMWazeOutputStore new];
-    if (method && !strcmp(method_getTypeEncoding(method),encoding)) {
-        MSHookMessageEx(cls,selector,(IMP)Descriptor,(IMP *)&OriginalDescriptor);
-        Status([NSString stringWithFormat:@"Waze %@: output v1 alert hook active",version]);
-    } else Status([NSString stringWithFormat:@"Waze %@: alert ABI mismatch; speed and limit checked independently",version]);
+    BOOL hooked=NO;
+    for (NSDictionary *variant in variants) {
+        SEL selector=sel_registerName([variant[@"sel"] UTF8String]);
+        Method method=class_getInstanceMethod(cls,selector);
+        if (method && !strcmp(method_getTypeEncoding(method),[variant[@"enc"] UTF8String])) {
+            MSHookMessageEx(cls,selector,(IMP)Descriptor,(IMP *)&OriginalDescriptor);
+            hooked=YES; break;
+        }
+    }
+    Status(hooked ? [NSString stringWithFormat:@"Waze %@: output v1 alert hook active",version]
+                  : [NSString stringWithFormat:@"Waze %@: alert ABI mismatch; speed and limit checked independently",version]);
     notify_register_dispatch(GVMOutputRequestName(GVMSourceWaze).UTF8String,&requestToken,
         dispatch_get_main_queue(),^(__unused int token) { Publish(YES); });
     ConfigureNativeLimit();

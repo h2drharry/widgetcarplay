@@ -176,7 +176,13 @@ trait `0`, `icon_alerter_cam_red_light` tuple to appended semantic type 34
 (`GVMRoadAlertRedLightCamera`). Native valid descriptors are available before
 Waze presents its warning card; trigger distance is not a freshness/validity gate.
 Passed/invalid updates remove only their identity. IDs and raw payloads stay local.
-Shared traffic-camera artwork represents this warning. Unknown tuples are omitted.
+Shared traffic-camera artwork represents this warning. Unknown tuples are omitted. The alert
+descriptor initializer is matched by selector and type encoding against the measured 5.25.0 and
+5.26.0 signatures; 5.26.0 appends a trailing `requireDistanceInRange:` BOOL that keeps every read
+argument at the same offset, so the fixed-signature hook reads both and ignores the extra one. A
+build matching neither leaves speed and limit working and no alerts (checked on device 2026-10-25:
+5.26.0 hooks the descriptor and reads speed and limit; 5.26.0 alerts themselves were not yet
+observed on a route).
 
 `WSVLocationGPSPosition` supplies mm/s converted to rounded km/h, preserving GPS
 sample age and rejecting duplicates/future/stale timestamps. The optional native
@@ -208,7 +214,11 @@ Only the navigation manager is forced to run, not the significant-change monitor
 The activity session precedes cold GPS start. A cached-only cold start can retry
 its lease-owned GPS twice, after30s then60s; a GPS sample received after the
 start ends retries; a held stationary speed does not. The next lease receives a fresh retry budget. No sample timestamp
-is renewed by recovery. A locked-device real-GPS run delivered fresh data for
+is renewed by recovery. The measured native start/stop routines are pinned per Waze build by the
+executable UUID and the routine's entry bytes; 5.25.0 and 5.26.0 are measured (5.26.0 verified on
+device 2026-10-25: a fully quit Waze, selected and not opened, published 0/50 within one wake and
+kept fresh GPS in the background). A build not in the table starts no background GPS, so Waze must
+be opened once. A locked-device real-GPS run delivered fresh data for
 more than one minute; long-idle/driving coverage remains experimental.
 Version/ABI mismatch leaves affected data unavailable.
 Foreground and new background red-light activation/pass were measured on Waze
@@ -228,7 +238,13 @@ Shared semantic IDs35–88 are appended for the missing road-warning families, w
 
 ## GOFA adapter (internal trial)
 
-Source 3 supports GOFA 4.2.1, version code 3 (`com.lumi.GOFA`). The adapter observes
+Source 3 reads GOFA (`com.lumi.GOFA`) in any build whose entry points still match: the
+`GOFA.GofaLocationManager` GPS callback by type encoding, and the notifications below by their
+reflected model and field names; no version gate. Measured on 4.2.1 (version code 3); on
+2026-10-25, 4.2.3 (version code 4) gave speed and limit in the foreground and the background
+(60 of 60 s each). Sign IDs are named from 4.2.1 and arrive with GOFA's map data, shared by its
+app builds; signs ahead and lane boards were not exercised on 4.2.3. The status file
+`tmp/gmaphud-gofa-output.json` records the GOFA build and whether the GPS hook matched. The adapter observes
 `notificationSpeedBoard`, `notificationNextBoard` and `notificationOtherBoard`.
 [The Swift parser](../provider/gofa-payload.swift) reflects only measured
 `GOFA.SpeedBoardModel` and `GOFA.DatapointModel` fields. Next/other groups retain

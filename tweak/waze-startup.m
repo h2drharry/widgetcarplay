@@ -19,7 +19,17 @@ static BOOL navigationInitializing, navigationInitialized, navigationConfirmed;
 static unsigned navigationAttempts;
 static double navigationStarted, navigationNextRetry;
 static __weak CLLocationManager *navigationOwnedManager;
+static __weak id navigationController;   // the LocationController instance, captured at its -init
 static void (*nativeNavigationStop)(void);
+// Waze's measured native GPS start/stop routines, pinned per build by UUID and entry bytes. The
+// 5.25.0 path reads its two singleton globals directly; later builds read the controller captured
+// at LocationController -init and its CLLocationManager through the -locationManager accessor.
+typedef struct {
+    const char *uuid;
+    uint32_t startOffset, stopOffset;
+    const uint8_t startBytes[68], stopBytes[68];
+    uint32_t managerGlobal, controllerGlobal;   // 5.25.0 only; 0 means use the ObjC accessor
+} GVMWazeNavBuild;
 BOOL GVMWazeOwnsNavigation(CLLocationManager *manager) { return manager && manager==navigationOwnedManager; }
 void GVMWazeTransferNavigation(void) { navigationOwnedManager=nil; navigationInitialized=YES; }
 BOOL GVMStopWazeNavigation(CLLocationManager *manager) {
@@ -31,9 +41,11 @@ BOOL GVMStopWazeNavigation(CLLocationManager *manager) {
 }
 BOOL GVMWazeNavigationInitializing(void) { return navigationInitializing; }
 BOOL GVMInitializeWazeNavigation(CLLocationManager *authorizedManager) {
+    // No version string: each entry in the build table below is pinned by the binary's UUID and the
+    // routine's entry bytes, so a build not in the table (or one whose bytes changed) finds no match
+    // and returns NO. Add a new Waze build by measuring its start/stop routine, never by relaxing this.
     if (!NSThread.isMainThread || navigationInitializing || UIApplication.sharedApplication.applicationState==UIApplicationStateActive ||
-        ![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.waze.iphone"] ||
-        ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] isEqual:@"5.25.0"]) return NO;
+        ![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.waze.iphone"]) return NO;
     double now=NSProcessInfo.processInfo.systemUptime;
     if (navigationInitialized) {
         if (!navigationOwnedManager) return NO;
@@ -46,28 +58,56 @@ BOOL GVMInitializeWazeNavigation(CLLocationManager *authorizedManager) {
         @finally { navigationInitializing=NO; }
         RecordStartup(@"navigation GPS retry after no fresh startup sample");
     }
-    const uint8_t uuid[]={0x90,0x94,0x7e,0x86,0xbf,0xf2,0x34,0x34,0xa2,0x8b,0x97,0x9c,0x65,0xdb,0x88,0x46};
-    const uint8_t entry[]={0xf4,0x4f,0xbe,0xa9,0xfd,0x7b,0x01,0xa9,0xfd,0x43,0x00,0x91,0xb3,0x1c,0x04,0xf0,0x68,0x9e,0x47,0xf9,0x28,0x01,0x00,0xb5,0xc8,0xfe,0x03,0xf0,0x00,0x05,0x44,0xf9,0x22,0x11,0x19,0x95,0x68,0x9e,0x47,0xf9,0x60,0x9e,0x07,0xf9,0x5b,0x11,0x19,0x95,0xa8,0x1c,0x04,0xf0,0x1f,0x61,0x3d,0x39,0xfd,0x7b,0x41,0xa9,0xf4,0x4f,0xc2,0xa8,0x01,0x00,0x00,0x14};
+    static const GVMWazeNavBuild builds[]={
+        {   // Waze 5.25.0
+            "90947E86-BFF2-3434-A28B-979C65DB8846", 0xa6ddc, 0xa6d6c,
+            {0xf4,0x4f,0xbe,0xa9,0xfd,0x7b,0x01,0xa9,0xfd,0x43,0x00,0x91,0xb3,0x1c,0x04,0xf0,0x68,0x9e,0x47,0xf9,0x28,0x01,0x00,0xb5,0xc8,0xfe,0x03,0xf0,0x00,0x05,0x44,0xf9,0x22,0x11,0x19,0x95,0x68,0x9e,0x47,0xf9,0x60,0x9e,0x07,0xf9,0x5b,0x11,0x19,0x95,0xa8,0x1c,0x04,0xf0,0x1f,0x61,0x3d,0x39,0xfd,0x7b,0x41,0xa9,0xf4,0x4f,0xc2,0xa8,0x01,0x00,0x00,0x14},
+            {0xff,0xc3,0x00,0xd1,0xf4,0x4f,0x01,0xa9,0xfd,0x7b,0x02,0xa9,0xfd,0x83,0x00,0x91,0xa8,0x1c,0x04,0xf0,0x1f,0x61,0x3d,0x39,0x09,0x54,0x40,0x94,0xb3,0x1c,0x04,0xf0,0x1f,0x0c,0x00,0x71,0x8c,0x01,0x00,0x54,0x68,0x9a,0x47,0xf9,0xe1,0x8f,0x03,0xd0,0x21,0x34,0x23,0x91,0xe3,0x8f,0x03,0xf0,0x63,0xbc,0x12,0x91,0xe4,0x8f,0x03,0xf0,0x84,0xd4,0x12,0x91},
+            0x843df30, 0x843df38,
+        },
+        {   // Waze 5.26.0: same routine shape; read the controller/manager through the ObjC accessor.
+            "35B4D105-0B38-384E-A147-64709C604759", 0xa33a4, 0xa33e8,
+            {0xf4,0x4f,0xbe,0xa9,0xfd,0x7b,0x01,0xa9,0xfd,0x43,0x00,0x91,0xd3,0x19,0x04,0xb0,0x68,0x3e,0x41,0xf9,0x28,0x01,0x00,0xb5,0xe8,0xfa,0x03,0xb0,0x00,0xc1,0x45,0xf9,0x45,0x4a,0x19,0x95,0x68,0x3e,0x41,0xf9,0x60,0x3e,0x01,0xf9,0x7e,0x4a,0x19,0x95,0xc8,0x19,0x04,0xb0,0x1f,0x61,0x0a,0x39,0xfd,0x7b,0x41,0xa9,0xf4,0x4f,0xc2,0xa8,0x01,0x00,0x00,0x14},
+            {0xff,0x03,0x01,0xd1,0xf6,0x57,0x01,0xa9,0xf4,0x4f,0x02,0xa9,0xfd,0x7b,0x03,0xa9,0xfd,0xc3,0x00,0x91,0xc8,0x19,0x04,0xb0,0x09,0x61,0x4a,0x39,0xc9,0x00,0x00,0x36,0xfd,0x7b,0x43,0xa9,0xf4,0x4f,0x42,0xa9,0xf6,0x57,0x41,0xa9,0xff,0x03,0x01,0x91,0xc0,0x03,0x5f,0xd6,0x29,0x00,0x80,0x52,0x09,0x61,0x0a,0x39,0x1c,0xab,0x40,0x94,0xd4,0x19,0x04,0xb0},
+            0, 0,
+        },
+    };
     for (uint32_t n=0;n<_dyld_image_count();n++) {
         const struct mach_header_64 *header=(const void *)_dyld_get_image_header(n);
-        if (!header || header->magic!=MH_MAGIC_64) continue;
+        if (!header || header->magic!=MH_MAGIC_64 || header->filetype!=MH_EXECUTE) continue;
+        NSString *uuid=nil;
         const struct load_command *load=(const void *)(header+1);
-        BOOL match=NO;
-        for (uint32_t c=0;c<header->ncmds;c++) {
-            if (load->cmd==LC_UUID && !memcmp(((const struct uuid_command *)load)->uuid,uuid,16)) match=YES;
+        for (uint32_t c=0;c<header->ncmds && !uuid;c++) {
+            if (load->cmd==LC_UUID)
+                uuid=[[NSUUID alloc] initWithUUIDBytes:((const struct uuid_command *)load)->uuid].UUIDString;
             load=(const void *)((const uint8_t *)load+load->cmdsize);
         }
-        if (!match) continue;
-        intptr_t slide=_dyld_get_image_vmaddr_slide(n);
-        void *function=(void *)(slide+0x1000a6ddc);
-        if (memcmp(function,entry,sizeof(entry))) return NO;
-        const uint8_t stopEntry[]={0xff,0xc3,0x00,0xd1,0xf4,0x4f,0x01,0xa9,0xfd,0x7b,0x02,0xa9,0xfd,0x83,0x00,0x91,0xa8,0x1c,0x04,0xf0,0x1f,0x61,0x3d,0x39,0x09,0x54,0x40,0x94,0xb3,0x1c,0x04,0xf0,0x1f,0x0c,0x00,0x71,0x8c,0x01,0x00,0x54,0x68,0x9a,0x47,0xf9,0xe1,0x8f,0x03,0xd0,0x21,0x34,0x23,0x91,0xe3,0x8f,0x03,0xf0,0x63,0xbc,0x12,0x91,0xe4,0x8f,0x03,0xf0,0x84,0xd4,0x12,0x91,0xe8,0x03,0x00,0xf9,0x60,0x00,0x80,0x52,0xa2,0x0f,0x80,0x52,0x95,0xd5,0x40,0x94,0x60,0x9a,0x47,0xf9,0x4f,0xe1,0x1a,0x95,0x60,0x9a,0x47,0xf9,0xfd,0x7b,0x42,0xa9,0xf4,0x4f,0x41,0xa9,0xff,0xc3,0x00,0x91,0x42,0xe1,0x1a,0x15};
-        void *stopFunction=(void *)(slide+0x1000a6d6c);
-        if (memcmp(stopFunction,stopEntry,sizeof(stopEntry))) return NO;
-        // This measured native routine creates its singleton controller and starts GPS.
-        // It is used by Waze's mobile foreground path; no scene activation is requested.
-        id manager=(__bridge id)(*(void **)(slide+0x10843df30));
-        id controller=(__bridge id)(*(void **)(slide+0x10843df38));
+        if (!uuid) continue;
+        const GVMWazeNavBuild *build=NULL;
+        for (size_t b=0;b<sizeof(builds)/sizeof(builds[0]);b++)
+            if ([uuid isEqualToString:@(builds[b].uuid)]) { build=&builds[b]; break; }
+        if (!build) continue;
+        void *function=(void *)((uintptr_t)header+build->startOffset);
+        void *stopFunction=(void *)((uintptr_t)header+build->stopOffset);
+        if (memcmp(function,build->startBytes,sizeof(build->startBytes)) ||
+            memcmp(stopFunction,build->stopBytes,sizeof(build->stopBytes))) return NO;
+        // The controller and its manager: from the build's singleton globals when known (5.25.0),
+        // else from the LocationController captured at -init and its -locationManager accessor. The
+        // globals, like the routine offsets above, are relative to the mach header (not the slide).
+        id (^currentController)(void)=^id{
+            if (build->controllerGlobal) return (__bridge id)(*(void **)((uintptr_t)header+build->controllerGlobal));
+            return navigationController;
+        };
+        id (^managerOf)(id)=^id(id controller){
+            if (build->managerGlobal) return (__bridge id)(*(void **)((uintptr_t)header+build->managerGlobal));
+            SEL sel=@selector(locationManager);
+            if (![controller respondsToSelector:sel]) return nil;
+            Method method=class_getInstanceMethod([controller class],sel);
+            if (!method || strcmp(method_getTypeEncoding(method),"@16@0:8")) return nil;
+            return ((id (*)(id,SEL))objc_msgSend)(controller,sel);
+        };
+        id controller=currentController();
+        id manager=managerOf(controller);
         if (controller && manager!=navigationOwnedManager) { navigationInitialized=YES; return NO; }
         if (manager && ![manager isKindOfClass:CLLocationManager.class]) return NO;
         CLAuthorizationStatus permission=authorizedManager.authorizationStatus;
@@ -80,8 +120,19 @@ BOOL GVMInitializeWazeNavigation(CLLocationManager *authorizedManager) {
         nativeNavigationStop=(void (*)(void))stopFunction;
         navigationInitializing=YES;
         @try {
+            // This measured native routine creates Waze's LocationController and starts its GPS;
+            // no scene activation is requested. -init fires NavigationInit synchronously, capturing
+            // the instance, so currentController() resolves right after the call.
             ((void (*)(void))function)();
-            navigationOwnedManager=(__bridge id)(*(void **)(slide+0x10843df30));
+            navigationOwnedManager=managerOf(currentController());
+            // Builds that read the controller by accessor depend on that capture. If it did not
+            // resolve a manager, do not leave untracked GPS running: stop what the routine just
+            // started and report failure, so the next wake attempt tries again from a clean state.
+            if (!build->managerGlobal && !navigationOwnedManager) {
+                ((void (*)(void))stopFunction)();
+                nativeNavigationStop=NULL;
+                return NO;
+            }
             navigationInitialized=YES;
             navigationStarted=now; navigationAttempts++;
             navigationNextRetry=now+2*GVMBackgroundRetryDelay(navigationAttempts);
@@ -137,6 +188,7 @@ static NavigationInitializer originalNavigationInit;
 static id NavigationInit(id self __attribute__((ns_consumed)),SEL cmd) __attribute__((ns_returns_retained));
 static id NavigationInit(id self __attribute__((ns_consumed)),SEL cmd) {
     id result=originalNavigationInit(self,cmd);
+    navigationController=result;   // the live LocationController, for builds that read it by accessor
     NSMutableArray *frames=[NSMutableArray new];
     for (NSNumber *address in NSThread.callStackReturnAddresses) {
         uintptr_t pc=address.unsignedLongLongValue;
@@ -292,8 +344,9 @@ static void CaptureStartupMetadata(void) {
     [codeData writeToFile:[NSTemporaryDirectory() stringByAppendingPathComponent:@"gmaphud-waze-lifecycle-code.json"] atomically:YES];
 }
 __attribute__((constructor)) static void ObserveWazeStartup(void) {
-    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.waze.iphone"] ||
-        ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] isEqual:@"5.25.0"]) return;
+    // Each hook below checks its own method type encoding before replacing it, so it stays inert on
+    // builds whose methods differ; no version gate.
+    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.waze.iphone"]) return;
     ObserveStartupMethods();
     Class navigation=NSClassFromString(@"LocationController");
     Method initializer=class_getInstanceMethod(navigation,@selector(init));

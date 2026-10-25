@@ -10,7 +10,7 @@ Tweak cho iOS jailbreak rootful/rootless, hiển thị **tốc độ hiện tạ
 
 ## Nguồn cảnh báo
 
-Chọn **VietMap Live**, **Waze** hoặc **GOFA**; mỗi lần chỉ dùng một nguồn. Waze được đọc qua bước kiểm tra riêng cho từng điểm nối vào app, đo trên bản 5.25.0: bản khác vẫn có tốc độ, giới hạn và cảnh báo khi code còn khớp, riêng việc tự bật GPS của Waze khi được đánh thức ngầm chỉ có ở 5.25.0 (bản khác cần mở Waze một lần). GOFA 4.2.1 build 3.
+Chọn **VietMap Live**, **Waze** hoặc **GOFA**; mỗi lần chỉ dùng một nguồn. Waze được đọc qua bước kiểm tra riêng cho từng điểm nối vào app, đo trên bản 5.25.0 và 5.26.0: bản khác vẫn có tốc độ, giới hạn và cảnh báo khi code còn khớp, riêng việc tự bật GPS của Waze khi được đánh thức ngầm có trên 5.25.0 và 5.26.0 (bản khác cần mở Waze một lần). GOFA cũng được đọc theo cách đó, đo trên bản 4.2.1 build 3 và đã kiểm trên 4.2.3 build 4 (tốc độ và giới hạn, cả khi chạy nền).
 
 ## Ảnh xem trước vị trí bong bóng
 

@@ -10,7 +10,7 @@ Rootful/rootless iOS tweak that displays **speed, limits and road alerts from Vi
 
 ## Warning sources
 
-Select **VietMap Live**, **Waze** or **GOFA**. Only one source is used at a time. Waze is read through checks on each native entry point, measured on 5.25.0: other builds keep speed, limit and alerts as far as their code still matches, and only 5.25.0 starts Waze GPS from a cold background launch (otherwise open Waze once). GOFA targets 4.2.1 build 3.
+Select **VietMap Live**, **Waze** or **GOFA**. Only one source is used at a time. Waze is read through checks on each native entry point, measured on 5.25.0 and 5.26.0: other builds keep speed, limit and alerts as far as their code still matches, and Waze GPS starts from a cold background launch on 5.25.0 and 5.26.0 (on other builds, open Waze once). GOFA is read the same way, measured on 4.2.1 build 3 and checked on 4.2.3 build 4 (speed and limit, also in the background).
 
 ## Bubble placement previews
 
