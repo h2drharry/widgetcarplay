@@ -1,4 +1,4 @@
-# GMapHUD
+# WidgetCarplay (fork GMapHUD)
 
 **English** · [Tiếng Việt](README.vi.md)
 
